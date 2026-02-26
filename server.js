@@ -727,16 +727,30 @@ io.on("connection", (socket) => {
   // disconnect
   socket.on("disconnect", () => {
     const ip = socket.data.ip;
+    console.log("⚡ Disconnected:", socket.id, "ip:", ip);
     if (ip) {
-      Location.findOneAndUpdate(
-        { ip },
-        { currentPage: "offline", updatedAt: new Date() },
-        { upsert: true, setDefaultsOnInsert: true }
-      )
-        .then(() => io.emit("locationUpdated", { ip, page: "offline" }))
-        .catch(console.error);
+      // تأخير 4 ثواني قبل تسجيل offline
+      // يعطي وقت للمستخدم ينتقل بين الصفحات ويتصل بـ socket جديد
+      setTimeout(() => {
+        // تحقق إذا في socket آخر متصل بنفس الـ IP
+        let hasActiveSocket = false;
+        io.of("/").sockets.forEach((s) => {
+          if (s.data.ip === ip) {
+            hasActiveSocket = true;
+          }
+        });
+        // فقط سجّل offline إذا ما في socket نشط لنفس الـ IP
+        if (!hasActiveSocket) {
+          Location.findOneAndUpdate(
+            { ip },
+            { currentPage: "offline", updatedAt: new Date() },
+            { upsert: true, setDefaultsOnInsert: true }
+          )
+            .then(() => io.emit("locationUpdated", { ip, page: "offline" }))
+            .catch(console.error);
+        }
+      }, 4000);
     }
-    console.log("⚡ Disconnected:", socket.id);
   });
 
   // toggleFlag
